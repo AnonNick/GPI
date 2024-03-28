@@ -14,14 +14,12 @@ def date_format(timestamp):
     return(formatted_date)
 
 
-
-#end_date= '2024-01-31T23:59:59Z'
-
 yesterday_date = (datetime.now() - timedelta(days=1)).replace(hour=23, minute=59, second=59).strftime("%Y-%m-%dT%H:%M:%SZ")
 end_date = yesterday_date #'2024-01-31T23:59:59Z'
 stat_date = '1960-01-01T00:00:00Z'
 start_dates_remove = 40
 stat_date= (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
+file_path = f'/glade/u/home/nikhilr/GPI'
 
 # The API URL
 Fobs_url = f'https://kp.gfz-potsdam.de/app/json/?start={stat_date}&end={end_date}&index=Fobs&status=def'
@@ -35,24 +33,11 @@ if response_Fobs.status_code == 200 and response_Kp.status_code == 200:
     # Parse the JSON data
     Fobs_data = response_Fobs.json()
     Kp_data = response_Kp.json()
-    # Print the data
-    #print(Fobs_data)
-    #print(Kp_data)
 else:
     print(f"Fpbs status code: {response_Fobs.status_code}")
     print(f"Kp status code: {response_Kp.status_code}")
 
 def compare_days_with_actual(years_count, actual_days_in_year):
-    """
-    Compare the counted days in each year from the list with the actual number of days in those years.
-
-    Args:
-    - years_count (dict): A dictionary with years as keys and the count of days from the list as values.
-    - actual_days_in_year (dict): A dictionary with years as keys and the actual number of days in those years as values.
-
-    Returns:
-    - discrepancies (dict): A dictionary with years as keys and the differences between actual days and counted days as values.
-    """
     discrepancies = {}
 
     for year, count in years_count.items():
@@ -88,8 +73,6 @@ def find_missing_dates(date_time_array):
             new_dates.append(int(next_date.strftime("%Y%j")))
     return new_dates, missing_dates, missing_date_index
 
-# Example usage
-
 
 
 def counter(date_time_array):
@@ -107,22 +90,29 @@ def counter(date_time_array):
 
     # Actual number of days in each year (considering leap years)
     actual_days_in_year = {year: 366 if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0) else 365 for year in years_count}
-    print(years_count, actual_days_in_year)
-    compare_days_with_actual(years_count, actual_days_in_year)
+    #print(years_count, actual_days_in_year)
+    #compare_days_with_actual(years_count, actual_days_in_year)
 
 
-print(len(Fobs_data['datetime']))
-print(len(Kp_data['datetime'])/8)
-# Process F107 data
 year_day = np.array([date_format(dt) for dt in Fobs_data['datetime']])
 f107d = np.array(Fobs_data['Fobs'])
 #counter(year_day)
 
-year_day, missing_date, missing_date_index =find_missing_dates(year_day)
-print(missing_date)
-#print(missing_date_index)
+year_day, missing_dates, missing_date_index =find_missing_dates(year_day)
 for i,l_index in enumerate(missing_date_index):
-    f107d = np.insert(f107d,i+l_index+1,-1)
+    missing_index = i+l_index+1
+    #f107_avg = (np.mean(f107d[missing_index-40:missing_index])+np.mean(f107d[missing_index+1:missing_index+41]))/2
+    if f107d[missing_index +1] == -1:
+        f107d_upper = f107d[missing_index +2]
+    else:
+        f107d_upper = f107d[missing_index +1]
+    if f107d[missing_index -1] == -1:
+        f107d_lower = f107d[missing_index -2]
+    else:
+        f107d_lower = f107d[missing_index -1]
+    f107_avg = (f107d_upper+f107d_lower)/2
+    print(year_day[missing_index],missing_index,f107_avg)
+    f107d = np.insert(f107d,missing_index,f107_avg)
 
 f107a = np.zeros_like(f107d)
 
@@ -175,33 +165,27 @@ else:
     Kp_end_dates_remove =  40 
 
 for date in unique_dates:
-    #print(date)
     formatted_string = "[%-*s] %d%% Date:%s" % (50, '=' * int((len(kp)) / len(unique_dates) * 50), (len(kp)) / len(unique_dates) * 100, date)
-
     # Writing the formatted string to stdout
     sys.stdout.write('\r')
     sys.stdout.write(formatted_string)
     sys.stdout.flush()
-    # Extract KP values for the current date
     daily_kps = [Kp_data['Kp'][i] for i, dt in enumerate(Kp_data['datetime']) if dt.startswith(date)]
-    kp.append(daily_kps[:8]) # Ensure only the first 8 values are taken for each day
-    
+    kp.append(daily_kps[:8]) 
 
-    #print(len(kp))
 kp = np.array(kp)
 
-#print(len(year_day),year_day[0],year_day[len(year_day)-1])
 year_day = year_day[start_dates_remove:-Fobs_end_dates_remove]
 f107d = f107d[start_dates_remove:-Fobs_end_dates_remove]
 f107a = f107a[start_dates_remove:-Fobs_end_dates_remove]
 kp = kp[start_dates_remove:-Kp_end_dates_remove]
 
 
-print(len(year_day),year_day[0],year_day[len(year_day)-1])
+"""print(len(year_day),year_day[0],year_day[len(year_day)-1])
 print(len(f107d))
 print(len(f107a))
-print(len(kp))
-#print(year_day, f107d,f107a, kp)
+print(len(kp))"""
+
 
 
 
@@ -217,13 +201,14 @@ ds = xr.Dataset({
 })
 
 # Adding global attributes
-ds.attrs['title'] = 'Geophysical Indices, obtained from NGDC'
+ds.attrs['title'] = 'Geophysical Indices, obtained from gfz-potsdam'
 ds.attrs['yearday_beg'] = year_day[0]
-ds.attrs['yearday_end'] = year_day[len(year_day)-1]  # Assuming the end day is the same as the start day for this single entry
+ds.attrs['yearday_end'] = year_day[len(year_day)-1]  
 ds.attrs['ncar_mss_path'] = '/TGCM/data/gpi_1960001-2015365.nc'
-ds.attrs['data_source_url'] = 'ftp://ftp.ngdc.noaa.gov/STP/GEOMAGNETIC_DATA/INDICES/KP_AP/'
-ds.attrs['hao_file_write_source'] = '/home/tgcm/mkgpi/mkncgpi.f'
+ds.attrs['data_source_url'] = 'https://kp.gfz-potsdam.de/'
+ds.attrs['hao_file_write_source'] = 'https://github.com/AnonNick/GPI'
 ds.attrs['info'] = 'Yearly ascii data files obtained from data_source_url; nc file written by hao_file_write_source.'
+ds.attrs['F107_missing'] = missing_dates
 
 
 if Fobs_end_dates_remove >= Kp_end_dates_remove:
@@ -231,9 +216,10 @@ if Fobs_end_dates_remove >= Kp_end_dates_remove:
 else:
     end_dates_remove = Kp_end_dates_remove
 end_date_str = (datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=end_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
-file_name=f'ngdc.{date_format(stat_date)}-{date_format(end_date_str)}'
-# Specify the path where you want to save the file
-file_path = f'/glade/u/home/nikhilr/GPI/1{file_name}.nc'
+start_date_str = (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') + timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+file_name=f'gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
+file_path = f'{file_path}/{file_name}'
 
 # Save the dataset as a NetCDF file
 ds.to_netcdf(path=file_path)
