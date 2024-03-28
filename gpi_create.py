@@ -1,8 +1,9 @@
 import xarray as xr
 import numpy as np
 import requests
-from datetime import datetime
-
+from datetime import datetime, timedelta
+import sys
+import time
 
 
 
@@ -13,8 +14,15 @@ def date_format(timestamp):
     return(formatted_date)
 
 
-stat_date= '1960-01-01T00:00:00Z'#'2024-02-01T23:59:59Z'#
-end_date= '2024-01-31T23:59:59Z'
+
+#end_date= '2024-01-31T23:59:59Z'
+
+yesterday_date = (datetime.now() - timedelta(days=1)).replace(hour=23, minute=59, second=59).strftime("%Y-%m-%dT%H:%M:%SZ")
+end_date = yesterday_date #'2024-01-31T23:59:59Z'
+stat_date = '1960-01-01T00:00:00Z'
+start_dates_remove = 40
+stat_date= (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 # The API URL
 Fobs_url = f'https://kp.gfz-potsdam.de/app/json/?start={stat_date}&end={end_date}&index=Fobs&status=def'
 Kp_url = f'https://kp.gfz-potsdam.de/app/json/?start={stat_date}&end={end_date}&index=Kp&status=def'
@@ -115,9 +123,6 @@ print(missing_date)
 #print(missing_date_index)
 for i,l_index in enumerate(missing_date_index):
     f107d = np.insert(f107d,i+l_index+1,-1)
-#print(len(dates),dates[0],dates[len(dates)-1])
-#print(len(year_day),year_day[0],year_day[len(year_day)-1])
-
 
 f107a = np.zeros_like(f107d)
 
@@ -128,14 +133,69 @@ for i in range(40, len(f107d) - 40):
 unique_dates = sorted(set([dt[:10] for dt in Kp_data['datetime']])) # Unique dates in KP data
 
 kp = []
+extra_dates_in_KP=0
+extra_dates_in_Fobs =0
+end_dates_remove = 0
+if len(unique_dates) != len(year_day):
+    Fobs_dates = [datetime.strptime(str(date), '%Y%j') for date in year_day]
+    Kp_dates = [datetime.strptime(date, '%Y-%m-%d') for date in unique_dates]
+    if Kp_dates[-1].date() == Fobs_dates[-1].date():
+        print("Both lists end on the same date.")
+    else:
+        print(Kp_dates[-1].date(),Fobs_dates[-1].date())
+        Kp_last_date =  Kp_dates[-1].date()
+        Fobs_lsat_date = Fobs_dates[-1].date()
+        time_delta = Kp_last_date - Fobs_lsat_date
+        if Kp_last_date > Fobs_lsat_date:
+            extra_dates_in_KP = abs(int(time_delta.days))
+        elif Fobs_lsat_date > Kp_last_date:
+            extra_dates_in_Fobs = abs(int(time_delta.days))
+        else:
+            extra_dates_in_KP = 0
+            extra_dates_in_Fobs= 0
+        #extra_dates_in_KP = len([date for date in Kp_dates if date.date() not in [d.date() for d in Fobs_dates]])
+        #extra_dates_in_Fobs = len([date for date in Fobs_dates if date.date() not in [d.date() for d in Kp_dates]])
+        print("Extra dates in KP_dates:", extra_dates_in_KP)
+        print("Extra dates in Fobs_dates:", extra_dates_in_Fobs)
+
+Kp_end_dates_remove = 0
+Fobs_end_dates_remove = 0
+if extra_dates_in_Fobs != 0:
+    if extra_dates_in_Fobs <= 40:
+        Fobs_end_dates_remove = 40
+        Kp_end_dates_remove =  40 - extra_dates_in_Fobs     
+    else:
+        Fobs_end_dates_remove = extra_dates_in_Fobs
+        Kp_end_dates_remove =  extra_dates_in_Fobs 
+elif extra_dates_in_KP !=0:
+    Fobs_end_dates_remove = 40
+    Kp_end_dates_remove =  extra_dates_in_KP + 40 
+else:
+    Fobs_end_dates_remove = 40
+    Kp_end_dates_remove =  40 
 
 for date in unique_dates:
-    print(date)
+    #print(date)
+    formatted_string = "[%-*s] %d%% Date:%s" % (50, '=' * int((len(kp)) / len(unique_dates) * 50), (len(kp)) / len(unique_dates) * 100, date)
+
+    # Writing the formatted string to stdout
+    sys.stdout.write('\r')
+    sys.stdout.write(formatted_string)
+    sys.stdout.flush()
     # Extract KP values for the current date
     daily_kps = [Kp_data['Kp'][i] for i, dt in enumerate(Kp_data['datetime']) if dt.startswith(date)]
     kp.append(daily_kps[:8]) # Ensure only the first 8 values are taken for each day
-    print(len(kp))
+    
+
+    #print(len(kp))
 kp = np.array(kp)
+
+#print(len(year_day),year_day[0],year_day[len(year_day)-1])
+year_day = year_day[start_dates_remove:-Fobs_end_dates_remove]
+f107d = f107d[start_dates_remove:-Fobs_end_dates_remove]
+f107a = f107a[start_dates_remove:-Fobs_end_dates_remove]
+kp = kp[start_dates_remove:-Kp_end_dates_remove]
+
 
 print(len(year_day),year_day[0],year_day[len(year_day)-1])
 print(len(f107d))
@@ -165,8 +225,15 @@ ds.attrs['data_source_url'] = 'ftp://ftp.ngdc.noaa.gov/STP/GEOMAGNETIC_DATA/INDI
 ds.attrs['hao_file_write_source'] = '/home/tgcm/mkgpi/mkncgpi.f'
 ds.attrs['info'] = 'Yearly ascii data files obtained from data_source_url; nc file written by hao_file_write_source.'
 
+
+if Fobs_end_dates_remove >= Kp_end_dates_remove:
+    end_dates_remove = Fobs_end_dates_remove
+else:
+    end_dates_remove = Kp_end_dates_remove
+end_date_str = (datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=end_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
+file_name=f'ngdc.{date_format(stat_date)}-{date_format(end_date_str)}'
 # Specify the path where you want to save the file
-file_path = '/glade/u/home/nikhilr/GPI/test3.nc'
+file_path = f'/glade/u/home/nikhilr/GPI/1{file_name}.nc'
 
 # Save the dataset as a NetCDF file
 ds.to_netcdf(path=file_path)
