@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 import sys
 import time
-
+import os
 
 
 def date_format(timestamp):
@@ -19,7 +19,7 @@ end_date = yesterday_date #'2024-01-31T23:59:59Z'
 stat_date = '1960-01-01T00:00:00Z'
 start_dates_remove = 40
 stat_date= (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
-file_path = f'/glade/u/home/nikhilr/GPI'
+file_path = os.getcwd()#f'/glade/u/home/nikhilr/GPI'
 
 # The API URL
 Fobs_url = f'https://kp.gfz-potsdam.de/app/json/?start={stat_date}&end={end_date}&index=Fobs&status=def'
