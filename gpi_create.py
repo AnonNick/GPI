@@ -33,8 +33,9 @@ if response_Fobs.status_code == 200 and response_Kp.status_code == 200:
     # Parse the JSON data
     Fobs_data = response_Fobs.json()
     Kp_data = response_Kp.json()
+    print("Fobs and Kp data retrieved.")
 else:
-    print(f"Fpbs status code: {response_Fobs.status_code}")
+    print(f"Fobs status code: {response_Fobs.status_code}")
     print(f"Kp status code: {response_Kp.status_code}")
 
 def compare_days_with_actual(years_count, actual_days_in_year):
@@ -99,6 +100,7 @@ f107d = np.array(Fobs_data['Fobs'])
 #counter(year_day)
 
 year_day, missing_dates, missing_date_index =find_missing_dates(year_day)
+print(f'Fobs Missing Days:{missing_dates}')
 for i,l_index in enumerate(missing_date_index):
     missing_index = i+l_index+1
     #f107_avg = (np.mean(f107d[missing_index-40:missing_index])+np.mean(f107d[missing_index+1:missing_index+41]))/2
@@ -111,7 +113,7 @@ for i,l_index in enumerate(missing_date_index):
     else:
         f107d_lower = f107d[missing_index -1]
     f107_avg = (f107d_upper+f107d_lower)/2
-    print(year_day[missing_index],missing_index,f107_avg)
+    print(f'    Year_Day:{year_day[missing_index]} Calculated F107d:{f107_avg}')
     f107d = np.insert(f107d,missing_index,f107_avg)
 
 f107a = np.zeros_like(f107d)
@@ -130,9 +132,9 @@ if len(unique_dates) != len(year_day):
     Fobs_dates = [datetime.strptime(str(date), '%Y%j') for date in year_day]
     Kp_dates = [datetime.strptime(date, '%Y-%m-%d') for date in unique_dates]
     if Kp_dates[-1].date() == Fobs_dates[-1].date():
-        print("Both lists end on the same date.")
+        print("Both Kp_dates and Fobs_dates end on the same date.")
     else:
-        print(Kp_dates[-1].date(),Fobs_dates[-1].date())
+        print(f'Kp_data End Date:{Kp_dates[-1].date()}\nFobs_data End Date:{Fobs_dates[-1].date()}')
         Kp_last_date =  Kp_dates[-1].date()
         Fobs_lsat_date = Fobs_dates[-1].date()
         time_delta = Kp_last_date - Fobs_lsat_date
@@ -164,14 +166,20 @@ else:
     Fobs_end_dates_remove = 40
     Kp_end_dates_remove =  40 
 
+print("Generating KP arrays:")
 for date in unique_dates:
+    '''
     formatted_string = "[%-*s] %d%% Date:%s" % (50, '=' * int((len(kp)) / len(unique_dates) * 50), (len(kp)) / len(unique_dates) * 100, date)
     # Writing the formatted string to stdout
     sys.stdout.write('\r')
     sys.stdout.write(formatted_string)
     sys.stdout.flush()
+    '''
+    print(f'    Working on {date}')
     daily_kps = [Kp_data['Kp'][i] for i, dt in enumerate(Kp_data['datetime']) if dt.startswith(date)]
     kp.append(daily_kps[:8]) 
+
+print("KP arrays generated")
 
 kp = np.array(kp)
 
@@ -188,7 +196,7 @@ print(len(kp))"""
 
 
 
-
+print(f'Creating NetCDF dataset')
 # Create an xarray Dataset
 ds = xr.Dataset({
     'year_day': (['ndays'], year_day, {'long_name': '4-digit year followed by 3-digit day'}),
