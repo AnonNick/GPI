@@ -19,6 +19,16 @@ def download_file(url, file_path):
     else:
         print(f"Failed to download the file. Status code: {response.status_code}")
 
+def interpolate(data):
+    data = np.array(data)
+    indices = np.arange(len(data))
+    # Create a mask for valid (non -1) values
+    valid = data != -1
+    # Use np.interp to fill in the missing (-1) values
+    data_interp = np.copy(data)
+    data_interp[~valid] = np.interp(indices[~valid], indices[valid], data[valid])
+    return data_interp
+    
 def find_starting_line(file_path, start_date):
     """Find the starting line index in the file based on a given start date."""
     with open(file_path, 'r') as file:
@@ -237,6 +247,7 @@ for i,l_index in enumerate(missing_date_index):
     print(year_day[missing_index],missing_index,f107_avg)
     f107d = np.insert(f107d,missing_index,f107_avg)
 
+f107d = interpolate(f107d)
 f107a = np.zeros_like(f107d)
 for i in range(27, len(f107d)):
     f107a[i] = np.mean(f107d[i-27:i])
@@ -337,7 +348,7 @@ else:
 end_date_str = (datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=end_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 start_date_str = (datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%SZ') + timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-file_name=f'gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
+file_name=f'gpi_27avg_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
 file_path = f'{file_path}/{file_name}'
 
 # Save the dataset as a NetCDF file

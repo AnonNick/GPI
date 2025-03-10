@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import sys
 import time
 import os
-
+import matplotlib.pyplot as plt
 
 def date_format(timestamp):
     date_time_obj = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
@@ -13,6 +13,15 @@ def date_format(timestamp):
     formatted_date = date_time_obj.strftime("%Y%j")
     return(formatted_date)
 
+def interpolate(data):
+    data = np.array(data)
+    indices = np.arange(len(data))
+    # Create a mask for valid (non -1) values
+    valid = data != -1
+    # Use np.interp to fill in the missing (-1) values
+    data_interp = np.copy(data)
+    data_interp[~valid] = np.interp(indices[~valid], indices[valid], data[valid])
+    return data_interp
 
 yesterday_date = (datetime.now() - timedelta(days=1)).replace(hour=23, minute=59, second=59).strftime("%Y-%m-%dT%H:%M:%SZ")
 end_date = yesterday_date #'2024-01-31T23:59:59Z'
@@ -116,6 +125,8 @@ for i,l_index in enumerate(missing_date_index):
     print(f'    Year_Day:{year_day[missing_index]} Calculated F107d:{f107_avg}')
     f107d = np.insert(f107d,missing_index,f107_avg)
 
+f107d = interpolate(f107d)
+
 f107a = np.zeros_like(f107d)
 
 for i in range(40, len(f107d) - 40):
@@ -188,15 +199,67 @@ f107d = f107d[start_dates_remove:-Fobs_end_dates_remove]
 f107a = f107a[start_dates_remove:-Fobs_end_dates_remove]
 kp = kp[start_dates_remove:-Kp_end_dates_remove]
 
+"""
+indices_with_negative_one = np.where(f107d == -1)[0]
+print("Indices where f107d is -1:", indices_with_negative_one)
 
-"""print(len(year_day),year_day[0],year_day[len(year_day)-1])
+for i in indices_with_negative_one:
+    print(year_day[i])
+print(len(year_day),year_day[0],year_day[len(year_day)-1])
 print(len(f107d))
 print(len(f107a))
 print(len(kp))"""
 
+year_day = np.array(year_day)
+f107d = np.array(f107d)
+years = [int(str(day)[:4]) for day in year_day]  # Extracting year from year_day
 
+unique_years = sorted(set(years))
+out_dir = '/plots'
+print(os.getcwd())
+output_dir = f'{os.getcwd()}/{out_dir}'
+print(output_dir)
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+for year in unique_years:
+    # Extract data for the current year
+    year_indices = [i for i, y in enumerate(years) if y == year]
+    year_day_values = year_day[year_indices]
+    f107d_values = f107d[year_indices]
+    f107a_values = f107a[year_indices]
 
-print(f'Creating NetCDF dataset')
+    # Create a plot for the current year
+    plt.figure(figsize=(10, 6))
+    plt.plot(year_day_values, f107d_values, label=f'Year {year}', color='b')
+    
+    plt.title(f'f107d vs Year Day ({year})')
+    plt.xlabel('Year Day')
+    plt.ylabel('f107d')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    # Save the plot to a file
+    plt.savefig(f'{output_dir}/f107d_{year}.png')
+    plt.close() 
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(year_day_values, f107a_values, label=f'Year {year}', color='b')
+    
+    plt.title(f'f107a vs Year Day ({year})')
+    plt.xlabel('Year Day')
+    plt.ylabel('f107a')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    # Save the plot to a file
+    plt.savefig(f'{output_dir}/f107a_{year}.png')
+
+    plt.close()  # Close the plot to avoid overlap with the next plot
+
+print("Plots for each year have been saved.")
+
 # Create an xarray Dataset
 ds = xr.Dataset({
     'year_day': (['ndays'], year_day, {'long_name': '4-digit year followed by 3-digit day'}),
@@ -226,7 +289,7 @@ else:
 end_date_str = (datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=end_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 start_date_str = (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') + timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-file_name=f'gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
+file_name=f'test_gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
 file_path = f'{file_path}/{file_name}'
 
 # Save the dataset as a NetCDF file
