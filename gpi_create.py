@@ -289,7 +289,7 @@ else:
 end_date_str = (datetime.strptime(end_date, '%Y-%m-%dT%H:%M:%SZ') - timedelta(days=end_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 start_date_str = (datetime.strptime(stat_date, '%Y-%m-%dT%H:%M:%SZ') + timedelta(days=start_dates_remove)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-file_name=f'test_gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
+file_name=f'gpi_{date_format(start_date_str)}-{date_format(end_date_str)}.nc'
 file_path = f'{file_path}/{file_name}'
 
 # Save the dataset as a NetCDF file
